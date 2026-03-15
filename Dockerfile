@@ -46,21 +46,16 @@ RUN apk add --no-cache openssl-dev
 
 WORKDIR /app
 
-# Copy workspace files for dependency resolution
+# Copy everything from builder (includes generated Prisma client in node_modules)
 COPY --from=builder /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
 COPY --from=builder /app/packages ./packages
-
-# Copy built API
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/package.json ./apps/api/
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
+COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
 
-# Install production dependencies only (ignore scripts to avoid prisma generate error)
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts
-
-# Generate Prisma client using the installed version (not npx which downloads latest)
 WORKDIR /app/apps/api
-RUN pnpm exec prisma generate --schema=./prisma/schema.prisma
 
 # Set environment
 ENV NODE_ENV=production
