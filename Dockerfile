@@ -8,7 +8,7 @@ FROM node:22-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
 # Install build dependencies
-RUN apk add --no-cache python3 make g++ openssl
+RUN apk add --no-cache python3 make g++ openssl-dev
 
 WORKDIR /app
 
@@ -39,7 +39,7 @@ RUN pnpm build
 FROM node:22-alpine AS runner
 
 # Install runtime dependencies for Prisma
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl-dev
 
 WORKDIR /app
 
