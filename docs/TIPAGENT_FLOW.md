@@ -39,14 +39,37 @@
 
 ### Komponen Utama
 
-| Komponen | Teknologi | Fungsi |
-|----------|-----------|--------|
-| **Frontend** | React + Vite | Dashboard untuk owner & contributor |
-| **Backend API** | Cloudflare Workers + Hono | Handle requests, webhooks, auth |
-| **Database** | Cloudflare D1 (SQLite) | Store users, projects, tips history |
-| **AI Agent** | Google Gemini API | Evaluasi kontribusi & tentukan tip amount |
-| **Blockchain** | Base Network (L2) | Transfer USDT ke contributor |
-| **Queue** | Cloudflare Queues | Process tip jobs async |
+| Komponen | Teknologi | Fungsi | Status |
+|----------|-----------|--------|--------|
+| **Frontend** | React + Vite | Dashboard untuk owner & contributor | ⏳ Pending |
+| **Backend API** | **Node.js + Hono** | Handle requests, webhooks, auth | ✅ Migrated |
+| **Database** | **PostgreSQL + Prisma** | Store users, projects, tips history | ✅ Migrated |
+| **AI Agent** | Google Gemini API | Evaluasi kontribusi & tentukan tip amount | ✅ Ready |
+| **Blockchain** | Base Network (L2) | Transfer USDT ke contributor | ✅ Ready |
+| **Queue** | In-Memory Queue | Process tip jobs async | ✅ Ready |
+| **Cron Jobs** | node-cron | Yield optimizer scheduler | ✅ Ready |
+| **Deployment** | Coolify (Docker) | Production hosting | 🔧 In Progress |
+
+### ⚠️ Migration Status (Updated: Mar 16, 2026)
+
+**Completed:**
+- ✅ Migrated from Cloudflare Workers to Node.js runtime
+- ✅ Replaced D1 (SQLite) with PostgreSQL via Prisma ORM
+- ✅ Replaced Cloudflare Queues with in-memory queue
+- ✅ Replaced Cloudflare Cron with node-cron
+- ✅ Created Dockerfile for Coolify deployment
+- ✅ Database schema pushed to PostgreSQL
+- ✅ All queries converted to Prisma syntax
+- ✅ Fixed Alpine Linux package dependencies
+- ✅ Fixed dotenv loading for production
+
+**In Progress:**
+- 🔧 Setting environment variables in Coolify
+- 🔧 Final deployment verification
+
+**Pending:**
+- ⏳ Frontend dashboard development
+- ⏳ Production testing & monitoring
 
 ---
 
