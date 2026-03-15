@@ -22,7 +22,7 @@ export async function evaluateWithGemini(
 ): Promise<TipDecision> {
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.0-flash-001",
     generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.2, maxOutputTokens: 256 },
     systemInstruction: buildSystemPrompt(
       rule.minAmount, 
@@ -32,12 +32,13 @@ export async function evaluateWithGemini(
       ownerTasks
     ),
   })
-  const res = await model.generateContent(buildUserPrompt(event))
   try {
+    const res = await model.generateContent(buildUserPrompt(event))
     const d = JSON.parse(res.response.text()) as TipDecision
     d.amountUsdt = Math.min(Math.max(d.amountUsdt ?? rule.suggestedMin, rule.minAmount), rule.maxAmount)
     return d
-  } catch {
-    return { allowed: true, amountUsdt: rule.suggestedMin, reasoning: "Fallback: parse error" }
+  } catch (e) {
+    console.error('[Gemini] evaluation failed, using fallback:', e)
+    return { allowed: true, amountUsdt: rule.suggestedMin, reasoning: "Fallback: AI evaluation unavailable" }
   }
 }
