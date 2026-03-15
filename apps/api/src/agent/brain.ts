@@ -39,6 +39,6 @@ export async function evaluateWithGemini(
     return d
   } catch (e) {
     console.error('[Gemini] evaluation failed, using fallback:', e)
-    return { allowed: true, amountUsdt: rule.suggestedMin, reasoning: "Fallback: AI evaluation unavailable" }
+    return { allowed: true, amountUsdt: Math.min(rule.suggestedMin, rule.maxAmount), reasoning: "Fallback: AI evaluation unavailable" }
   }
 }

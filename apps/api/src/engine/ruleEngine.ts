@@ -35,16 +35,17 @@ export async function evaluateRules(event: TipEvent, project: Project, env: Env)
     return reject(`Daily cap reached: ${prev} USDT sent today (max: ${cfg.cap})`)
   }
   
-  // Calculate tier-based suggestion
+  // Calculate tier-based suggestion, always bounded by project config
   const [sMin, sMax] = tier(event)
   const effectiveMax = Math.min(cfg.max, sMax, cfg.cap - prev)
-  
+  const effectiveMin = Math.min(cfg.min, effectiveMax)
+
   return {
     allowed: true,
-    minAmount: cfg.min,
+    minAmount: effectiveMin,
     maxAmount: effectiveMax,
-    suggestedMin: Math.max(sMin, cfg.min),
-    suggestedMax: Math.min(sMax, effectiveMax)
+    suggestedMin: Math.min(Math.max(sMin, effectiveMin), effectiveMax),
+    suggestedMax: effectiveMax
   }
 }
 
