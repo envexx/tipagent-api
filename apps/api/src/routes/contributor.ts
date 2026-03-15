@@ -38,18 +38,18 @@ contributorRoute.get('/my-tips', async (c) => {
   const limit = parseInt(c.req.query('limit') ?? '50')
   const tips = await getTipsReceivedByUser(c.env.DB, user.githubUsername, limit)
   
-  return c.json({ 
+  return c.json({
     tips: tips.results?.map((t: any) => ({
       id: t.id,
-      projectId: t.project_id,
+      projectId: t.projectId,
       githubRepo: t.github_repo,
-      eventType: t.event_type,
-      amountUsdt: t.amount_usdt,
+      eventType: t.eventType,
+      amountUsdt: t.amountUsdt,
       status: t.status,
-      txHash: t.tx_hash,
+      txHash: t.txHash,
       reasoning: t.reasoning,
-      createdAt: t.created_at,
-      confirmedAt: t.confirmed_at
+      createdAt: Number(t.createdAt),
+      confirmedAt: t.confirmedAt ? Number(t.confirmedAt) : null
     })) ?? []
   })
 })
