@@ -25,7 +25,7 @@ RUN pnpm install --frozen-lockfile
 
 # Generate Prisma client
 WORKDIR /app/apps/api
-RUN npx prisma generate
+RUN pnpm exec prisma generate
 
 # Build shared package
 WORKDIR /app/packages/shared
@@ -58,9 +58,9 @@ COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 # Install production dependencies only (ignore scripts to avoid prisma generate error)
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
-# Generate Prisma client in production using npx
+# Generate Prisma client using the installed version (not npx which downloads latest)
 WORKDIR /app/apps/api
-RUN npx prisma generate --schema=./prisma/schema.prisma
+RUN pnpm exec prisma generate --schema=./prisma/schema.prisma
 
 # Set environment
 ENV NODE_ENV=production
