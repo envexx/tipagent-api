@@ -91,7 +91,7 @@ export async function getProjectsByOwner(db: PrismaClient, ownerId: number): Pro
 
 export async function createProject(db: PrismaClient, data: {
   ownerId: number; githubRepo: string; webhookSecret: string; walletAddress: string
-  tipMinUsdt?: string; tipMaxUsdt?: string; dailyCap?: string; cooldownHours?: string
+  tipMinUsdt?: string; tipMaxUsdt?: string; dailyCap?: string; cooldownHours?: string; tasks?: string
 }): Promise<number> {
   const now = BigInt(Date.now())
   const project = await db.project.create({
@@ -104,6 +104,7 @@ export async function createProject(db: PrismaClient, data: {
       tipMaxUsdt: data.tipMaxUsdt ?? '50',
       dailyCap: data.dailyCap ?? '100',
       cooldownHours: data.cooldownHours ?? '1',
+      tasks: data.tasks ?? null,
       createdAt: now,
       updatedAt: now
     }

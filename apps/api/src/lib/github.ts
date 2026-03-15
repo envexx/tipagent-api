@@ -90,6 +90,44 @@ export async function createGitHubWebhook(
 }
 
 /**
+ * Create an issue on a GitHub repository
+ */
+export async function createGitHubIssue(
+  token: string,
+  repo: string,
+  issue: { title: string; body: string; labels?: string[] }
+): Promise<{ ok: true; issueNumber: number; issueUrl: string } | { ok: false; error: string }> {
+  const [owner, repoName] = repo.split('/')
+  try {
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repoName}/issues`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+        'User-Agent': 'TipAgent'
+      },
+      body: JSON.stringify({
+        title: issue.title,
+        body: issue.body,
+        labels: issue.labels ?? []
+      })
+    })
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      return { ok: false, error: `GitHub API error: ${response.status} - ${JSON.stringify(err)}` }
+    }
+
+    const data = await response.json() as { number: number; html_url: string }
+    return { ok: true, issueNumber: data.number, issueUrl: data.html_url }
+  } catch (e: any) {
+    return { ok: false, error: e.message }
+  }
+}
+
+/**
  * Delete a webhook from a GitHub repository
  */
 export async function deleteGitHubWebhook(

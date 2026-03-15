@@ -5,7 +5,7 @@ import {
   getProjectTreasury, getUserByUsername, getUserGithubToken
 } from '../db/queries.js'
 import { HDWalletManager } from '../wallet/hdWallet.js'
-import { createGitHubWebhook, checkRepoAccess } from '../lib/github.js'
+import { createGitHubWebhook, checkRepoAccess, createGitHubIssue } from '../lib/github.js'
 
 export const projectsRoute = new Hono<{ Bindings: Env }>()
 
@@ -81,12 +81,13 @@ projectsRoute.get('/:id', async (c) => {
 // Create new project
 projectsRoute.post('/', async (c) => {
   const userId = c.get('userId')
-  const body = await c.req.json<{ 
+  const body = await c.req.json<{
     githubRepo: string
     tipMinUsdt?: string
     tipMaxUsdt?: string
     dailyCap?: string
     cooldownHours?: string
+    tasks?: string
   }>()
   
   if (!body.githubRepo || !/^[\w-]+\/[\w.-]+$/.test(body.githubRepo)) {
@@ -137,7 +138,8 @@ projectsRoute.post('/', async (c) => {
       tipMinUsdt: body.tipMinUsdt,
       tipMaxUsdt: body.tipMaxUsdt,
       dailyCap: body.dailyCap,
-      cooldownHours: body.cooldownHours
+      cooldownHours: body.cooldownHours,
+      tasks: body.tasks
     })
     
     // Now derive the actual wallet address using project ID
@@ -153,14 +155,30 @@ projectsRoute.post('/', async (c) => {
     const project = await getProjectById(c.env.DB, projectId)
     const treasury = await getProjectTreasury(c.env.DB, projectId)
     const chainInfo = hdWallet.getChainInfo()
-    
-    return c.json({ 
-      ok: true, 
-      project, 
+
+    // Auto-create GitHub issue if tasks are provided
+    let issueResult: { issueNumber?: number; issueUrl?: string } = {}
+    if (body.tasks) {
+      const issueBody = `## 🤖 TipAgent — Available Tasks\n\n${body.tasks}\n\n---\n**Tip Rules:**\n- Min tip: $${body.tipMinUsdt ?? '0.5'} USDT\n- Max tip: $${body.tipMaxUsdt ?? '50'} USDT\n- Daily cap: $${body.dailyCap ?? '100'} USDT\n\n> Complete a task and open a PR to automatically receive a USDT tip! 🎉\n> Make sure you're registered at [TipAgent](${c.env.FRONTEND_URL}) with your wallet address.`
+      const issue = await createGitHubIssue(githubToken, body.githubRepo, {
+        title: '🎯 TipAgent: Open Tasks — Earn USDT for contributions',
+        body: issueBody,
+        labels: ['tipagent', 'good first issue']
+      })
+      if (issue.ok) {
+        issueResult = { issueNumber: issue.issueNumber, issueUrl: issue.issueUrl }
+        console.log(`[Projects] Auto-created issue #${issue.issueNumber} for project ${projectId}`)
+      }
+    }
+
+    return c.json({
+      ok: true,
+      project,
       treasury,
       walletAddress,
       chainInfo,
-      webhookSetup: 'auto', // Webhook was auto-configured!
+      webhookSetup: 'auto',
+      issueCreated: issueResult,
       depositInstructions: [
         `✅ Webhook automatically configured on GitHub!`,
         `Your project wallet address: ${walletAddress}`,
