@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
-import type { Env } from '../index'
-import { getTipStats, getRecentTips, getProjectsByOwner, getProjectTreasury } from '../db/queries'
+import type { Env } from '../index.js'
+import { getTipStats, getRecentTips, getProjectsByOwner, getProjectTreasury } from '../db/queries.js'
 
 export const tipsRoute = new Hono<{ Bindings: Env }>()
 
@@ -28,12 +28,13 @@ tipsRoute.get('/', async (c) => {
     return c.json({ data: [] })
   }
   
-  const placeholders = projectIds.map(() => '?').join(',')
-  const rows = await c.env.DB.prepare(
-    `SELECT * FROM tip_history WHERE project_id IN (${placeholders}) ORDER BY created_at DESC LIMIT ?`
-  ).bind(...projectIds, limit).all()
+  const tips = await c.env.DB.tipHistory.findMany({
+    where: { projectId: { in: projectIds } },
+    orderBy: { createdAt: 'desc' },
+    take: limit
+  })
   
-  return c.json({ data: rows.results })
+  return c.json({ data: tips })
 })
 
 // GET /stats — aggregate stats for user's projects
@@ -58,25 +59,26 @@ tipsRoute.get('/stats', async (c) => {
     return c.json({ totalTips: 0, totalUsdt: 0, todayTips: 0, activeUsers: 0 })
   }
   
-  const placeholders = projectIds.map(() => '?').join(',')
-  const tot = await c.env.DB.prepare(
-    `SELECT COUNT(*) as c, COALESCE(SUM(CAST(amount_usdt AS REAL)),0) as s FROM tip_history WHERE project_id IN (${placeholders}) AND status='confirmed'`
-  ).bind(...projectIds).first<{ c: number; s: number }>()
+  // Get all confirmed tips for these projects
+  const allTips = await c.env.DB.tipHistory.findMany({
+    where: { projectId: { in: projectIds }, status: 'confirmed' },
+    select: { amountUsdt: true, recipientId: true, createdAt: true }
+  })
   
-  const today = new Date().toISOString().split('T')[0]
-  const tod = await c.env.DB.prepare(
-    `SELECT COUNT(*) as c FROM tip_history WHERE project_id IN (${placeholders}) AND status='confirmed' AND created_at>?`
-  ).bind(...projectIds, new Date(today).getTime()).first<{ c: number }>()
+  const totalUsdt = allTips.reduce((sum: number, t: { amountUsdt: string }) => sum + parseFloat(t.amountUsdt), 0)
   
-  const usr = await c.env.DB.prepare(
-    `SELECT COUNT(DISTINCT recipient_id) as c FROM tip_history WHERE project_id IN (${placeholders}) AND status='confirmed'`
-  ).bind(...projectIds).first<{ c: number }>()
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const todayStart = BigInt(today.getTime())
+  const todayTips = allTips.filter((t: { createdAt: bigint }) => t.createdAt >= todayStart).length
+  
+  const uniqueUsers = new Set(allTips.map((t: { recipientId: string }) => t.recipientId))
   
   return c.json({
-    totalTips: tot?.c ?? 0,
-    totalUsdt: tot?.s ?? 0,
-    todayTips: tod?.c ?? 0,
-    activeUsers: usr?.c ?? 0
+    totalTips: allTips.length,
+    totalUsdt,
+    todayTips,
+    activeUsers: uniqueUsers.size
   })
 })
 

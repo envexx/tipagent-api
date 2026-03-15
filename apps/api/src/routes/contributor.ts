@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
-import type { Env } from '../index'
-import { getAllActiveProjects, getTipsReceivedByUser, getReceivedTipStats, getUserById } from '../db/queries'
+import type { Env } from '../index.js'
+import { getAllActiveProjects, getTipsReceivedByUser, getReceivedTipStats, getUserById } from '../db/queries.js'
 
 export const contributorRoute = new Hono<{ Bindings: Env }>()
 

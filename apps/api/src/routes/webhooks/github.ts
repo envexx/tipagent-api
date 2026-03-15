@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import type { Env } from '../../index'
-import { verifyGitHubSignature } from '../../triggers/verifier'
-import { normalizeGitHubPR, normalizeGitHubIssue } from '../../triggers/normalizer'
-import { getProjectByRepo } from '../../db/queries'
+import type { Env } from '../../index.js'
+import { verifyGitHubSignature } from '../../triggers/verifier.js'
+import { normalizeGitHubPR, normalizeGitHubIssue } from '../../triggers/normalizer.js'
+import { getProjectByRepo } from '../../db/queries.js'
 
 export const githubRoute = new Hono<{ Bindings: Env }>()
 

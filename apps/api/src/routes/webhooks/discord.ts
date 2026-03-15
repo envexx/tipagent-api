@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
-import type { Env } from '../../index'
-import { verifyHmac } from '../../triggers/verifier'
-import { normalizeDiscordReaction } from '../../triggers/normalizer'
+import type { Env } from '../../index.js'
+import { verifyHmac } from '../../triggers/verifier.js'
+import { normalizeDiscordReaction } from '../../triggers/normalizer.js'
 
 export const discordRoute = new Hono<{ Bindings: Env }>()
 

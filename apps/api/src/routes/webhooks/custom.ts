@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import type { Env } from '../../index'
-import { verifyHmac } from '../../triggers/verifier'
-import { normalizeCustomWebhook } from '../../triggers/normalizer'
-import { getProjectByWebhookSecret } from '../../db/queries'
+import type { Env } from '../../index.js'
+import { verifyHmac } from '../../triggers/verifier.js'
+import { normalizeCustomWebhook } from '../../triggers/normalizer.js'
+import { getProjectByWebhookSecret } from '../../db/queries.js'
 
 export const customRoute = new Hono<{ Bindings: Env }>()
 

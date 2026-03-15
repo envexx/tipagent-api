@@ -1,7 +1,7 @@
-import type { Env } from '../index'
-import { HDWalletManager } from '../wallet/hdWallet'
-import { YieldManager } from '../wallet/yieldManager'
-import { cleanExpiredRateLimits, getAllActiveProjects } from '../db/queries'
+import type { Env } from '../index.js'
+import { HDWalletManager } from '../wallet/hdWallet.js'
+import { YieldManager } from '../wallet/yieldManager.js'
+import { cleanExpiredRateLimits, getAllActiveProjects } from '../db/queries.js'
 
 export async function runYieldOptimizer(env: Env) {
   console.log("[Cron] YieldOptimizer running")

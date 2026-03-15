@@ -15,7 +15,7 @@
 
 import WDK from '@tetherto/wdk'
 import WalletManagerEvm from '@tetherto/wdk-wallet-evm'
-import type { Env } from '../index'
+import type { Env } from '../index.js'
 
 // USDT contract address on Base
 const USDT_BASE = '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2'

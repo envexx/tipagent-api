@@ -1,7 +1,7 @@
 import type { TipEvent, Project } from '@tipagent/shared'
-import type { Env } from '../index'
-import type { RuleResult } from './types'
-import { getRateLimit } from '../db/queries'
+import type { Env } from '../index.js'
+import type { RuleResult } from './types.js'
+import { getRateLimit } from '../db/queries.js'
 
 export async function evaluateRules(event: TipEvent, project: Project, env: Env): Promise<RuleResult> {
   // Use project-specific rules

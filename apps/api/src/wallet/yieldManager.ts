@@ -5,8 +5,8 @@
 import WDK from '@tetherto/wdk'
 import WalletManagerEvm from '@tetherto/wdk-wallet-evm'
 import AaveLendingProtocol from '@tetherto/wdk-protocol-lending-aave-evm'
-import type { Env } from '../index'
-import { saveTreasurySnapshot } from '../db/queries'
+import type { Env } from '../index.js'
+import { saveTreasurySnapshot } from '../db/queries.js'
 
 // USDT contract address on Base
 const USDT_BASE = '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2'

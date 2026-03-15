@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie'
-import type { Env } from '../index'
-import { getUserByGithubId, createUser, createSession, getSession, deleteSession, getUserById, updateUserGithubToken } from '../db/queries'
+import type { Env } from '../index.js'
+import { getUserByGithubId, createUser, createSession, getSession, deleteSession, getUserById, updateUserGithubToken } from '../db/queries.js'
 
 export const authRoute = new Hono<{ Bindings: Env }>()
 

@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
 import type { TipEvent, TipDecision }     from '@tipagent/shared'
-import type { RuleResult }                from '../engine/types'
-import { buildSystemPrompt, buildUserPrompt } from './prompts'
+import type { RuleResult }                from '../engine/types.js'
+import { buildSystemPrompt, buildUserPrompt } from './prompts.js'
 
 const SCHEMA = {
   type: SchemaType.OBJECT,

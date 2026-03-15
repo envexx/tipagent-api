@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
-import type { Env } from '../index'
-import { updateUserWallet, getUserById, getUserGithubToken } from '../db/queries'
+import type { Env } from '../index.js'
+import { updateUserWallet, getUserById, getUserGithubToken } from '../db/queries.js'
 
 export const userRoute = new Hono<{ Bindings: Env }>()
 

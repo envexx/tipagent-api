@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from 'hono'
 import { getCookie } from 'hono/cookie'
-import type { Env } from '../index'
-import { getSession, getUserById } from '../db/queries'
+import type { Env } from '../index.js'
+import { getSession, getUserById } from '../db/queries.js'
 import type { User } from '@tipagent/shared'
 
 // Extend Hono context with user

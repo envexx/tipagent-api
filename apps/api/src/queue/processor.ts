@@ -1,14 +1,14 @@
 import type { TipEvent } from '@tipagent/shared'
-import type { Env } from '../index'
-import { evaluateRules } from '../engine/ruleEngine'
-import { evaluateWithGemini } from '../agent/brain'
-import { HDWalletManager, calculateTipFee } from '../wallet/hdWallet'
-import { notifyGitHub } from '../notifier/github'
-import { notifyDiscord } from '../notifier/discord'
+import type { Env } from '../index.js'
+import { evaluateRules } from '../engine/ruleEngine.js'
+import { evaluateWithGemini } from '../agent/brain.js'
+import { HDWalletManager, calculateTipFee } from '../wallet/hdWallet.js'
+import { notifyGitHub } from '../notifier/github.js'
+import { notifyDiscord } from '../notifier/discord.js'
 import { 
   saveAuditLog, saveTipHistory, updateTipStatus, setRateLimit, getRateLimit,
   getProjectById, getUserByUsername
-} from '../db/queries'
+} from '../db/queries.js'
 
 export interface QueueMessage { type: 'tip_event'; event: TipEvent }
 

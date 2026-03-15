@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
-import type { Env } from '../index'
+import type { Env } from '../index.js'
 import { 
   getProjectsByOwner, getProjectById, createProject, updateProjectRules,
   getProjectTreasury, getUserByUsername, getUserGithubToken
-} from '../db/queries'
-import { HDWalletManager } from '../wallet/hdWallet'
-import { createGitHubWebhook, checkRepoAccess } from '../lib/github'
+} from '../db/queries.js'
+import { HDWalletManager } from '../wallet/hdWallet.js'
+import { createGitHubWebhook, checkRepoAccess } from '../lib/github.js'
 
 export const projectsRoute = new Hono<{ Bindings: Env }>()
 
@@ -145,8 +145,10 @@ projectsRoute.post('/', async (c) => {
     const walletAddress = await hdWallet.getProjectAddress(projectId)
     
     // Update project with real wallet address and webhook ID
-    await c.env.DB.prepare('UPDATE projects SET wallet_address=?, webhook_id=? WHERE id=?')
-      .bind(walletAddress, webhookResult.webhookId, projectId).run()
+    await c.env.DB.project.update({
+      where: { id: projectId },
+      data: { walletAddress, webhookId: webhookResult.webhookId }
+    })
     
     const project = await getProjectById(c.env.DB, projectId)
     const treasury = await getProjectTreasury(c.env.DB, projectId)

@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             Int       @id @default(autoincrement())
+  githubId       String    @unique @map("github_id")
+  githubUsername String    @map("github_username")
+  githubToken    String?   @map("github_token")
+  displayName    String?   @map("display_name")
+  avatarUrl      String?   @map("avatar_url")
+  walletAddr     String?   @map("wallet_addr")
+  chain          String    @default("base")
+  createdAt      BigInt    @map("created_at")
+  updatedAt      BigInt    @map("updated_at")
+
+  projects Project[]
+  sessions Session[]
+
+  @@map("users")
+}
+
+model Project {
+  id            Int      @id @default(autoincrement())
+  ownerId       Int      @map("owner_id")
+  githubRepo    String   @unique @map("github_repo")
+  webhookSecret String   @map("webhook_secret")
+  webhookId     Int?     @map("webhook_id")
+  walletAddress String   @map("wallet_address")
+  isActive      Boolean  @default(true) @map("is_active")
+  tipMinUsdt    String   @default("0.5") @map("tip_min_usdt")
+  tipMaxUsdt    String   @default("50") @map("tip_max_usdt")
+  dailyCap      String   @default("100") @map("daily_cap")
+  cooldownHours String   @default("1") @map("cooldown_hours")
+  tasks         String?
+  createdAt     BigInt   @map("created_at")
+  updatedAt     BigInt   @map("updated_at")
+
+  owner    User              @relation(fields: [ownerId], references: [id])
+  treasury ProjectTreasury?
+  deposits Deposit[]
+  tips     TipHistory[]
+  audits   EventAudit[]
+  snapshots TreasurySnapshot[]
+
+  @@map("projects")
+}
+
+model ProjectTreasury {
+  id             Int    @id @default(autoincrement())
+  projectId      Int    @unique @map("project_id")
+  balanceUsdt    String @default("0") @map("balance_usdt")
+  aaveUsdt       String @default("0") @map("aave_usdt")
+  totalDeposited String @default("0") @map("total_deposited")
+  totalTipped    String @default("0") @map("total_tipped")
+  updatedAt      BigInt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@map("project_treasuries")
+}
+
+model Deposit {
+  id          Int     @id @default(autoincrement())
+  projectId   Int     @map("project_id")
+  amountUsdt  String  @map("amount_usdt")
+  txHash      String  @map("tx_hash")
+  fromAddr    String  @map("from_addr")
+  status      String  @default("pending")
+  createdAt   BigInt  @map("created_at")
+  confirmedAt BigInt? @map("confirmed_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@map("deposits")
+}
+
+model TipHistory {
+  id            Int     @id @default(autoincrement())
+  projectId     Int     @map("project_id")
+  eventId       String  @unique @map("event_id")
+  source        String
+  eventType     String  @map("event_type")
+  recipientId   String  @map("recipient_id")
+  recipientAddr String  @map("recipient_addr")
+  amountUsdt    String  @map("amount_usdt")
+  reasoning     String?
+  txHash        String? @map("tx_hash")
+  chain         String  @default("base")
+  status        String  @default("pending")
+  createdAt     BigInt  @map("created_at")
+  confirmedAt   BigInt? @map("confirmed_at")
+  errorMsg      String? @map("error_msg")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([recipientId])
+  @@index([createdAt])
+  @@map("tip_history")
+}
+
+model RateLimit {
+  id        Int    @id @default(autoincrement())
+  key       String @unique
+  value     String
+  expiresAt BigInt @map("expires_at")
+
+  @@index([expiresAt])
+  @@map("rate_limits")
+}
+
+model EventAudit {
+  id           Int     @id @default(autoincrement())
+  projectId    Int?    @map("project_id")
+  eventId      String  @map("event_id")
+  source       String
+  eventType    String  @map("event_type")
+  result       String
+  rejectReason String? @map("reject_reason")
+  rawPayload   String  @map("raw_payload")
+  createdAt    BigInt  @map("created_at")
+
+  project Project? @relation(fields: [projectId], references: [id])
+
+  @@map("event_audit")
+}
+
+model TreasurySnapshot {
+  id         Int     @id @default(autoincrement())
+  projectId  Int     @map("project_id")
+  liquidUsdt String  @map("liquid_usdt")
+  aaveUsdt   String  @map("aave_usdt")
+  totalUsdt  String  @map("total_usdt")
+  aaveApy    String? @map("aave_apy")
+  snapshotAt BigInt  @map("snapshot_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@map("treasury_snapshots")
+}
+
+model Session {
+  id        String @id
+  userId    Int    @map("user_id")
+  expiresAt BigInt @map("expires_at")
+  createdAt BigInt @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
