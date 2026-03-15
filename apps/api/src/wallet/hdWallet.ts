@@ -24,7 +24,15 @@ export class HDWalletManager {
   private wdk: any
   
   constructor(masterSeed: string, rpcUrl: string) {
-    this.wdk = new WDK(masterSeed)
+    // WDK accepts Uint8Array (16-64 bytes) or BIP-39 mnemonic phrase
+    // Convert hex string to Uint8Array if needed
+    let seed: string | Uint8Array = masterSeed
+    if (/^(0x)?[0-9a-fA-F]{32,128}$/.test(masterSeed.trim())) {
+      const hex = masterSeed.startsWith('0x') ? masterSeed.slice(2) : masterSeed
+      seed = new Uint8Array(Buffer.from(hex, 'hex'))
+    }
+
+    this.wdk = new WDK(seed)
       .registerWallet('base', WalletManagerEvm, {
         provider: rpcUrl,
       })
