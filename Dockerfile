@@ -2,13 +2,15 @@
 # Build from monorepo root
 
 # Build stage
-FROM node:22-alpine AS builder
+FROM node:22-slim AS builder
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
 # Install build dependencies
-RUN apk add --no-cache python3 make g++ openssl-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -36,13 +38,15 @@ WORKDIR /app/apps/api
 RUN pnpm build
 
 # Production stage
-FROM node:22-alpine AS runner
+FROM node:22-slim AS runner
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
-# Install runtime dependencies for Prisma
-RUN apk add --no-cache openssl-dev
+# Install runtime dependencies for Prisma and native modules
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 wget \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
