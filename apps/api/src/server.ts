@@ -1,15 +1,17 @@
 /**
  * Node.js server entry point
  * Uses @hono/node-server for HTTP handling
- * Loads env from .dev.vars
+ * Loads env from .env/.dev.vars in development, uses process.env in production
  */
-import { config } from 'dotenv'
-import { resolve, dirname } from 'path'
-import { fileURLToPath } from 'url'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
-// Load .dev.vars file
-config({ path: resolve(__dirname, '../.dev.vars') })
+// Only load dotenv in development
+if (process.env.NODE_ENV !== 'production') {
+  const { config } = await import('dotenv')
+  const { resolve, dirname } = await import('path')
+  const { fileURLToPath } = await import('url')
+  const __dirname = dirname(fileURLToPath(import.meta.url))
+  config({ path: resolve(__dirname, '../.env') })
+  config({ path: resolve(__dirname, '../.dev.vars') })
+}
 
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
