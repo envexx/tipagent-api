@@ -1,0 +1,1026 @@
+TipAgent
+Autonomous USDT Tipping Bot
+Complete Technical Specification for Cursor  ·  v2
+Hono · React · Cloudflare Workers/Pages/D1/Queues · Google Gemini 2.0 Flash · Tether WDK · Aave V3
+Hackathon Galáctica: WDK Edition 1  |  Track: 💸 Tipping Bot
+📋 Cara Menggunakan Dokumen Ini
+Dokumen ini adalah spec lengkap dirancang khusus untuk dilempar ke Cursor AI.
+Setiap section mencakup: path file, kode lengkap, dan perintah terminal.
+Cursor hanya perlu: baca spec → generate kode → isi .dev.vars → jalankan setup commands.
+File yang tidak ada kodenya: lihat tabel Section 10.2 untuk instruksi generate Cursor.
+Jangan skip section apapun — setiap bagian saling bergantung.
+
+ 
+1. Project Overview
+1.1 Ringkasan
+TipAgent adalah autonomous AI agent yang mengirim USDT tip secara otomatis kepada kontributor berdasarkan event dari GitHub, Discord, dan custom webhook. Agent menggunakan Tether WDK untuk self-custodial wallet, Google Gemini 2.0 Flash sebagai reasoning engine, dan Aave V3 untuk yield dari USDT idle di treasury.
+
+Stack Decisions — v2 Final
+LLM: Google Gemini 2.0 Flash — structured JSON output native, cost-efficient.
+Storage: Cloudflare D1 SAJA — rate limit dan cooldown pindah ke tabel D1 rate_limits. Tidak ada KV.
+Queue: Cloudflare Queues native — zero external dependency, retry built-in.
+Aave V3 Yield: WAJIB ADA — ini differentiator utama vs semua kompetitor.
+Backend: Hono.js ke CF Workers. Frontend: React ke CF Pages.
+
+1.2 Tech Stack Final
+Layer	Teknologi	Package / Versi	Alasan
+Runtime	TypeScript + Node 20	TS 5.x	CF Workers compat
+Backend	Hono.js	^4.4.0	Native CF Workers
+Frontend	React + Vite	React 18, Vite 5	SPA ke CF Pages
+Deploy API	Cloudflare Workers	wrangler 3.x	Serverless edge
+Deploy UI	Cloudflare Pages	wrangler 3.x	CDN global
+Database	Cloudflare D1	SQLite serverless	Native CF, free tier
+Queue	Cloudflare Queues	CF native binding	Async, retry built-in
+LLM	Google Gemini	gemini-2.0-flash	Structured output
+Blockchain	viem v2	^2.21.0	Type-safe EVM
+Wallet	Tether WDK	latest	Self-custodial — WAJIB
+DeFi	Aave V3	Base + Polygon	USDT yield idle — WAJIB
+Monorepo	pnpm workspaces	pnpm 9.x	Shared types
+
+1.3 Alur End-to-End
+•	GitHub/Discord/Webhook kirim POST ke Hono endpoint
+•	HMAC diverifikasi, event dinormalisasi ke TipEvent
+•	Event di-push ke Cloudflare Queue (webhook return 200 instan)
+•	Queue consumer: Rule Engine (D1) → Gemini evaluate → WDK transfer USDT
+•	CF cron setiap 30 menit: cek liquid balance → deposit excess ke Aave V3
+•	Post-tip: auto-comment di GitHub/Discord dengan tx hash Basescan link
+
+ 
+2. Struktur Monorepo Lengkap
+2.1 Root
+tipagent/
+├── apps/
+│   ├── api/          # Hono backend → Cloudflare Workers
+│   └── dashboard/    # React SPA → Cloudflare Pages
+├── packages/
+│   └── shared/       # Shared types + constants + ABIs
+├── pnpm-workspace.yaml
+├── turbo.json
+└── package.json
+
+2.2 apps/api/ — Hono Backend
+apps/api/
+├── src/
+│   ├── index.ts                  # Entry: Hono app + CF Queue export + cron scheduled
+│   ├── routes/
+│   │   ├── webhooks/
+│   │   │   ├── github.ts         # POST /webhooks/github
+│   │   │   ├── discord.ts        # POST /webhooks/discord
+│   │   │   └── custom.ts         # POST /webhooks/custom
+│   │   ├── registry.ts           # GET/POST/DELETE /api/registry
+│   │   ├── tips.ts               # GET /api/tips  /api/tips/stats  /api/tips/treasury
+│   │   └── health.ts             # GET /health
+│   ├── agent/
+│   │   ├── brain.ts              # Gemini 2.0 Flash + structured output
+│   │   └── prompts.ts            # System + user prompt builders
+│   ├── engine/
+│   │   ├── ruleEngine.ts         # Cooldown/cap/tier dari D1
+│   │   └── types.ts              # RuleResult interface
+│   ├── wallet/
+│   │   ├── wdkManager.ts         # WDK balance + transfer (viem wrapper)
+│   │   └── yieldManager.ts       # Aave V3 deposit/withdraw/snapshot — WAJIB
+│   ├── triggers/
+│   │   ├── normalizer.ts         # Payload → TipEvent
+│   │   └── verifier.ts           # HMAC-SHA256
+│   ├── registry/
+│   │   └── resolver.ts           # D1 lookup userId → wallet
+│   ├── notifier/
+│   │   ├── github.ts             # GitHub API comment
+│   │   └── discord.ts            # Discord Bot API message
+│   ├── queue/
+│   │   └── processor.ts          # Full agent flow (10 steps)
+│   ├── jobs/
+│   │   └── yieldOptimizer.ts     # Cron: deposit idle + snapshot + cleanup
+│   ├── db/
+│   │   ├── schema.sql            # D1 migration
+│   │   └── queries.ts            # Type-safe D1 helpers
+│   └── middleware/
+│       └── auth.ts               # X-API-Key untuk /api/*
+├── wrangler.toml
+├── .dev.vars                     # LOCAL ONLY — jangan commit
+└── package.json
+
+2.3 apps/dashboard/ — React Frontend
+apps/dashboard/
+├── src/
+│   ├── main.tsx
+│   ├── App.tsx              # React Router setup
+│   ├── pages/
+│   │   ├── Dashboard.tsx    # Stats + TipFeed
+│   │   ├── Registry.tsx     # User→wallet management
+│   │   └── Treasury.tsx     # Wallet + Aave panel
+│   ├── components/
+│   │   ├── TipFeed.tsx
+│   │   ├── StatsCard.tsx
+│   │   ├── TreasuryPanel.tsx
+│   │   └── RegistryTable.tsx
+│   └── lib/
+│       └── api.ts           # fetch wrapper
+├── _redirects               # /* /index.html 200
+├── vite.config.ts
+└── package.json
+
+ 
+3. Environment Variables & Cloudflare Config
+3.1 apps/api/wrangler.toml
+name = "tipagent-api"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database (SATU-SATUNYA storage — tidak ada KV)
+[[d1_databases]]
+binding      = "DB"
+database_name= "tipagent-db"
+database_id  = "FILL_AFTER_wrangler_d1_create"
+
+# Cloudflare Queues
+[[queues.producers]]
+binding = "TIP_QUEUE"
+queue   = "tip-events-queue"
+
+[[queues.consumers]]
+queue             = "tip-events-queue"
+max_batch_size    = 10
+max_batch_timeout = 5
+max_retries       = 3
+dead_letter_queue = "tip-events-dlq"
+
+# Cron trigger — Aave yield optimizer setiap 30 menit
+[triggers]
+crons = ["*/30 * * * *"]
+
+# Non-secret runtime vars
+[vars]
+ENVIRONMENT         = "production"
+PRIMARY_CHAIN       = "base"
+LIQUID_RESERVE_USDT = "50"
+TIP_MIN_USDT        = "0.5"
+TIP_MAX_USDT        = "50"
+DAILY_CAP_PER_USER  = "50"
+DAILY_CAP_GLOBAL    = "500"
+COOLDOWN_HOURS      = "1"
+YIELD_ENABLED       = "true"   # JANGAN ubah ke false
+
+3.2 apps/api/.dev.vars — Local Only (GITIGNORE!)
+⚠️ Jangan Commit File Ini
+Hanya dipakai oleh wrangler dev untuk local. Untuk production: wrangler secret put NAMA_VAR
+Tambahkan .dev.vars ke .gitignore sebelum commit pertama.
+
+# Google Gemini — https://aistudio.google.com/app/apikey
+GEMINI_API_KEY=AIzaSy...
+
+# Tether WDK — private key 0x + 64 hex chars
+# Ganti dengan WDK SDK call ketika @tether/wdk npm package tersedia
+WDK_PRIVATE_KEY=0x...
+
+# GitHub
+GITHUB_WEBHOOK_SECRET=random_32chars
+GITHUB_TOKEN=ghp_...
+
+# Discord
+DISCORD_BOT_TOKEN=...
+DISCORD_WEBHOOK_SECRET=random_32chars
+
+# Custom Webhook
+CUSTOM_WEBHOOK_SECRET=random_32chars
+
+# Dashboard auth — generate: openssl rand -hex 16
+DASHBOARD_API_KEY=random_32chars
+
+# RPC
+BASE_RPC_URL=https://mainnet.base.org
+POLYGON_RPC_URL=https://polygon-rpc.com
+
+3.3 Production Secrets Setup
+wrangler secret put GEMINI_API_KEY
+wrangler secret put WDK_PRIVATE_KEY
+wrangler secret put GITHUB_WEBHOOK_SECRET
+wrangler secret put GITHUB_TOKEN
+wrangler secret put DISCORD_BOT_TOKEN
+wrangler secret put DISCORD_WEBHOOK_SECRET
+wrangler secret put CUSTOM_WEBHOOK_SECRET
+wrangler secret put DASHBOARD_API_KEY
+wrangler secret put BASE_RPC_URL
+wrangler secret put POLYGON_RPC_URL
+
+ 
+4. Database Schema — Cloudflare D1
+4.1 apps/api/src/db/schema.sql
+Cara jalankan
+Local:      wrangler d1 execute tipagent-db --local --file=apps/api/src/db/schema.sql
+Production: wrangler d1 execute tipagent-db --file=apps/api/src/db/schema.sql
+
+-- user registry: GitHub/Discord userId → wallet address
+CREATE TABLE IF NOT EXISTS user_registry (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  source       TEXT    NOT NULL,
+  user_id      TEXT    NOT NULL,
+  display_name TEXT,
+  wallet_addr  TEXT    NOT NULL,
+  chain        TEXT    NOT NULL DEFAULT "base",
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL,
+  UNIQUE(source, user_id)
+);
+
+-- tip history
+CREATE TABLE IF NOT EXISTS tip_history (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id       TEXT    NOT NULL UNIQUE,
+  source         TEXT    NOT NULL,
+  event_type     TEXT    NOT NULL,
+  recipient_id   TEXT    NOT NULL,
+  recipient_addr TEXT    NOT NULL,
+  amount_usdt    TEXT    NOT NULL,
+  reasoning      TEXT,
+  tx_hash        TEXT,
+  chain          TEXT    NOT NULL DEFAULT "base",
+  status         TEXT    NOT NULL DEFAULT "pending",
+  created_at     INTEGER NOT NULL,
+  confirmed_at   INTEGER,
+  error_msg      TEXT
+);
+
+-- rate_limits: cooldown + daily cap (menggantikan KV)
+CREATE TABLE IF NOT EXISTS rate_limits (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  key        TEXT    NOT NULL UNIQUE,
+  value      TEXT    NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
+-- event audit log
+CREATE TABLE IF NOT EXISTS event_audit (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id      TEXT    NOT NULL,
+  source        TEXT    NOT NULL,
+  event_type    TEXT    NOT NULL,
+  result        TEXT    NOT NULL,
+  reject_reason TEXT,
+  raw_payload   TEXT    NOT NULL,
+  created_at    INTEGER NOT NULL
+);
+
+-- treasury snapshots (balance + Aave position history)
+CREATE TABLE IF NOT EXISTS treasury_snapshots (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  liquid_usdt TEXT    NOT NULL,
+  aave_usdt   TEXT    NOT NULL,
+  total_usdt  TEXT    NOT NULL,
+  aave_apy    TEXT,
+  snapshot_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tip_recipient ON tip_history(recipient_id);
+CREATE INDEX IF NOT EXISTS idx_tip_created   ON tip_history(created_at);
+CREATE INDEX IF NOT EXISTS idx_rate_key      ON rate_limits(key);
+CREATE INDEX IF NOT EXISTS idx_rate_expires  ON rate_limits(expires_at);
+
+4.2 apps/api/src/db/queries.ts
+import type { D1Database } from '@cloudflare/workers-types'
+import type { TipEvent }   from '@tipagent/shared'
+
+// ── Rate limits (D1, bukan KV) ────────────────────────────────────────────
+export async function getRateLimit(db:D1Database, key:string): Promise<string|null> {
+  const r = await db.prepare('SELECT value FROM rate_limits WHERE key=? AND expires_at>?')
+    .bind(key, Date.now()).first<{value:string}>()
+  return r?.value ?? null
+}
+
+export async function setRateLimit(db:D1Database,key:string,value:string,ttlMs:number) {
+  const exp = Date.now() + ttlMs
+  await db.prepare('INSERT INTO rate_limits(key,value,expires_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,expires_at=excluded.expires_at')
+    .bind(key,value,exp).run()
+}
+
+export async function cleanExpiredRateLimits(db:D1Database) {
+  await db.prepare('DELETE FROM rate_limits WHERE expires_at<?').bind(Date.now()).run()
+}
+
+// ── Tip history ───────────────────────────────────────────────────────────
+export async function saveTipHistory(db:D1Database, a:{
+  eventId:string; event:TipEvent; recipientAddr:string
+  amountUsdt:number; reasoning:string; status?:string
+}) {
+  await db.prepare('INSERT INTO tip_history(event_id,source,event_type,recipient_id,recipient_addr,amount_usdt,reasoning,chain,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)')
+    .bind(a.eventId,a.event.source,a.event.eventType,a.event.recipient.id,
+         a.recipientAddr,a.amountUsdt.toString(),a.reasoning,"base",a.status??"pending",Date.now()).run()
+}
+
+export async function updateTipStatus(db:D1Database,eventId:string,status:"confirmed"|"failed",txHash?:string,err?:string) {
+  await db.prepare('UPDATE tip_history SET status=?,tx_hash=?,error_msg=?,confirmed_at=? WHERE event_id=?')
+    .bind(status,txHash??null,err??null,Date.now(),eventId).run()
+}
+
+export async function saveAuditLog(db:D1Database,a:{eventId:string;event:TipEvent;result:string;reason?:string}) {
+  await db.prepare('INSERT INTO event_audit(event_id,source,event_type,result,reject_reason,raw_payload,created_at) VALUES(?,?,?,?,?,?,?)')
+    .bind(a.eventId,a.event.source,a.event.eventType,a.result,a.reason??null,JSON.stringify(a.event.rawPayload),Date.now()).run()
+}
+
+export async function getRecentTips(db:D1Database,limit=20) {
+  return db.prepare('SELECT * FROM tip_history ORDER BY created_at DESC LIMIT ?').bind(limit).all()
+}
+
+export async function getTipStats(db:D1Database) {
+  const tot = await db.prepare('SELECT COUNT(*) as c, COALESCE(SUM(CAST(amount_usdt AS REAL)),0) as s FROM tip_history WHERE status="confirmed"').first<{c:number;s:number}>()
+  const today = new Date().toISOString().split("T")[0]
+  const tod = await db.prepare('SELECT COUNT(*) as c FROM tip_history WHERE status="confirmed" AND created_at>?').bind(new Date(today).getTime()).first<{c:number}>()
+  const usr = await db.prepare('SELECT COUNT(DISTINCT recipient_id) as c FROM tip_history WHERE status="confirmed"').first<{c:number}>()
+  return{totalTips:tot?.c??0,totalUsdt:tot?.s??0,todayTips:tod?.c??0,activeUsers:usr?.c??0}
+}
+
+export async function saveTreasurySnapshot(db:D1Database,a:{liquidUsdt:number;aaveUsdt:number;aaveApy?:string}) {
+  await db.prepare('INSERT INTO treasury_snapshots(liquid_usdt,aave_usdt,total_usdt,aave_apy,snapshot_at) VALUES(?,?,?,?,?)')
+    .bind(a.liquidUsdt.toString(),a.aaveUsdt.toString(),(a.liquidUsdt+a.aaveUsdt).toString(),a.aaveApy??null,Date.now()).run()
+}
+
+ 
+5. Shared Types & Constants (packages/shared/src)
+5.1 types/tipEvent.ts
+export type TipEventSource = 'github'|'discord'|'webhook'
+export type TipEventType = 'pr_merged'|'issue_closed'|'discord_reaction'|'discord_command'|'discord_thread_resolved'|'custom_webhook'
+
+export interface TipEvent {
+  id:string; source:TipEventSource; eventType:TipEventType
+  actor:    { id:string; displayName?:string }
+  recipient:{ id:string; displayName?:string; walletAddress?:string }
+  context:{
+    repoName?:string; prNumber?:number; prTitle?:string
+    prAdditions?:number; prDeletions?:number
+    issueNumber?:number; issueLabels?:string[]
+    discordChannelId?:string; discordMessageId?:string; reactionCount?:number
+    customPayload?:Record<string,unknown>
+  }
+  timestamp:number
+  rawPayload:unknown
+}
+
+export interface TipDecision {
+  allowed:boolean; amountUsdt:number; reasoning:string; rejectReason?:string
+}
+
+5.2 constants/chains.ts
+import { base, polygon } from 'viem/chains'
+export const SUPPORTED_CHAINS = {
+  base:{chain:base,
+    usdtAddress:"0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2" as `0x${string}`,
+    aavePool:   "0xA238Dd80C259a72e81d7e4664317d3e1bce696b3" as `0x${string}`,
+    aUSDT:      "0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8" as `0x${string}`,
+    blockExplorer:"https://basescan.org"},
+  polygon:{chain:polygon,
+    usdtAddress:"0xc2132D05D31c914a87C6611C10748AEb04B58e8F" as `0x${string}`,
+    aavePool:   "0x794a61358D6845594F94dc1DB02A252b5b4814aD" as `0x${string}`,
+    aUSDT:      "0x625E7708f30cA75bfd92586e17077590C60eb4cD" as `0x${string}`,
+    blockExplorer:"https://polygonscan.com"},
+} as const
+export type SupportedChain = keyof typeof SUPPORTED_CHAINS
+
+5.3 constants/abis.ts
+export const ERC20_ABI=[
+ {name:"transfer",type:"function",stateMutability:"nonpayable",
+  inputs:[{name:"to",type:"address"},{name:"amount",type:"uint256"}],outputs:[{name:"",type:"bool"}]},
+ {name:"approve",type:"function",stateMutability:"nonpayable",
+  inputs:[{name:"spender",type:"address"},{name:"amount",type:"uint256"}],outputs:[{name:"",type:"bool"}]},
+ {name:"balanceOf",type:"function",stateMutability:"view",
+  inputs:[{name:"account",type:"address"}],outputs:[{name:"",type:"uint256"}]},
+] as const
+
+export const AAVE_POOL_ABI=[
+ {name:"supply",type:"function",stateMutability:"nonpayable",
+  inputs:[{name:"asset",type:"address"},{name:"amount",type:"uint256"},{name:"onBehalfOf",type:"address"},{name:"referralCode",type:"uint16"}],outputs:[]},
+ {name:"withdraw",type:"function",stateMutability:"nonpayable",
+  inputs:[{name:"asset",type:"address"},{name:"amount",type:"uint256"},{name:"to",type:"address"}],outputs:[{name:"",type:"uint256"}]},
+] as const
+
+export const ATOKEN_ABI=[
+ {name:"balanceOf",type:"function",stateMutability:"view",
+  inputs:[{name:"account",type:"address"}],outputs:[{name:"",type:"uint256"}]},
+] as const
+
+ 
+6. Backend — Kode Lengkap (apps/api/src)
+6.1 index.ts — Entry Point + CF Exports
+import { Hono }             from 'hono'
+import { cors }             from 'hono/cors'
+import { logger }           from 'hono/logger'
+import { githubRoute }      from './routes/webhooks/github'
+import { discordRoute }     from './routes/webhooks/discord'
+import { customRoute }      from './routes/webhooks/custom'
+import { registryRoute }    from './routes/registry'
+import { tipsRoute }        from './routes/tips'
+import { healthRoute }      from './routes/health'
+import { authMiddleware }   from './middleware/auth'
+import { processQueueMessage, type QueueMessage } from './queue/processor'
+import { runYieldOptimizer } from './jobs/yieldOptimizer'
+
+export type Env = {
+  DB:D1Database; TIP_QUEUE:Queue<QueueMessage>
+  GEMINI_API_KEY:string; WDK_PRIVATE_KEY:string
+  GITHUB_WEBHOOK_SECRET:string; GITHUB_TOKEN:string
+  DISCORD_BOT_TOKEN:string; DISCORD_WEBHOOK_SECRET:string
+  CUSTOM_WEBHOOK_SECRET:string; DASHBOARD_API_KEY:string
+  BASE_RPC_URL:string; POLYGON_RPC_URL:string
+  ENVIRONMENT:string; PRIMARY_CHAIN:string
+  LIQUID_RESERVE_USDT:string; TIP_MIN_USDT:string; TIP_MAX_USDT:string
+  DAILY_CAP_PER_USER:string; DAILY_CAP_GLOBAL:string
+  COOLDOWN_HOURS:string; YIELD_ENABLED:string
+}
+
+const app = new Hono<{Bindings:Env}>()
+app.use("*", logger())
+app.use("*", cors({origin:"*",allowMethods:["GET","POST","PUT","DELETE"]}))
+app.route("/webhooks/github",  githubRoute)
+app.route("/webhooks/discord", discordRoute)
+app.route("/webhooks/custom",  customRoute)
+app.route("/health",           healthRoute)
+app.use("/api/*", authMiddleware)
+app.route("/api/registry", registryRoute)
+app.route("/api/tips",     tipsRoute)
+
+export default {
+  fetch: app.fetch,
+  async queue(batch:MessageBatch<QueueMessage>, env:Env) {
+    for (const msg of batch.messages) {
+      try { await processQueueMessage(msg.body,env); msg.ack() }
+      catch(e){ console.error("[Queue]",e); msg.retry() }
+    }
+  },
+  async scheduled(_:ScheduledEvent, env:Env, ctx:ExecutionContext) {
+    ctx.waitUntil(runYieldOptimizer(env))
+  },
+}
+
+6.2 triggers/verifier.ts
+export async function verifyGitHubSignature(payload:string,sig:string,secret:string):Promise<boolean>{
+  const enc=new TextEncoder()
+  const key=await crypto.subtle.importKey("raw",enc.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"])
+  const mac=await crypto.subtle.sign("HMAC",key,enc.encode(payload))
+  const expected="sha256="+[...new Uint8Array(mac)].map(b=>b.toString(16).padStart(2,"0")).join("")
+  return timingSafe(expected,sig)
+}
+export async function verifyHmac(payload:string,sig:string,secret:string):Promise<boolean>{
+  const enc=new TextEncoder()
+  const key=await crypto.subtle.importKey("raw",enc.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"])
+  const mac=await crypto.subtle.sign("HMAC",key,enc.encode(payload))
+  const computed=btoa(String.fromCharCode(...new Uint8Array(mac)))
+  return timingSafe(computed,sig)
+}
+function timingSafe(a:string,b:string):boolean{
+  if(a.length!==b.length)return false
+  let r=0; for(let i=0;i<a.length;i++)r|=a.charCodeAt(i)^b.charCodeAt(i)
+  return r===0
+}
+
+6.3 triggers/normalizer.ts
+import type { TipEvent } from '@tipagent/shared'
+export function normalizeGitHubPR(p:any):TipEvent|null{
+  if(p.action!=="closed"||!p.pull_request?.merged)return null
+  const pr=p.pull_request
+  return{id:crypto.randomUUID(),source:"github",eventType:"pr_merged",
+    actor:{id:pr.merged_by?.login??pr.user.login},
+    recipient:{id:pr.user.login,displayName:pr.user.login},
+    context:{repoName:p.repository.full_name,prNumber:pr.number,prTitle:pr.title,
+             prAdditions:pr.additions,prDeletions:pr.deletions},
+    timestamp:Date.now(),rawPayload:p}
+}
+export function normalizeGitHubIssue(p:any):TipEvent|null{
+  if(p.action!=="closed"||!p.issue)return null
+  const i=p.issue
+  return{id:crypto.randomUUID(),source:"github",eventType:"issue_closed",
+    actor:{id:p.sender.login},
+    recipient:{id:i.user.login,displayName:i.user.login},
+    context:{repoName:p.repository.full_name,issueNumber:i.number,
+             issueLabels:i.labels?.map((l:any)=>l.name)??[]},
+    timestamp:Date.now(),rawPayload:p}
+}
+export function normalizeDiscordReaction(p:any):TipEvent|null{
+  return{id:crypto.randomUUID(),source:"discord",eventType:"discord_reaction",
+    actor:{id:"system"},recipient:{id:p.message_author_id},
+    context:{discordChannelId:p.channel_id,discordMessageId:p.message_id,reactionCount:p.reaction_count},
+    timestamp:Date.now(),rawPayload:p}
+}
+
+6.4 routes/webhooks/github.ts
+import { Hono } from 'hono'
+import type { Env } from '../../index'
+import { verifyGitHubSignature } from '../../triggers/verifier'
+import { normalizeGitHubPR, normalizeGitHubIssue } from '../../triggers/normalizer'
+export const githubRoute=new Hono<{Bindings:Env}>()
+githubRoute.post("/",async(c)=>{
+  const sig=c.req.header("X-Hub-Signature-256")??""
+  const body=await c.req.text()
+  if(!await verifyGitHubSignature(body,sig,c.env.GITHUB_WEBHOOK_SECRET))
+    return c.json({error:"Invalid signature"},401)
+  const payload=JSON.parse(body)
+  const event=c.req.header("X-GitHub-Event")
+  const tipEvent=event==="pull_request"?normalizeGitHubPR(payload)
+    :event==="issues"?normalizeGitHubIssue(payload):null
+  if(!tipEvent)return c.json({ok:true,skipped:true})
+  await c.env.TIP_QUEUE.send({type:"tip_event",event:tipEvent})
+  return c.json({ok:true,eventId:tipEvent.id})
+})
+
+6.5 agent/brain.ts — Google Gemini 2.0 Flash
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
+import type { TipEvent, TipDecision }     from '@tipagent/shared'
+import type { RuleResult }                from '../engine/types'
+
+const SCHEMA={
+  type:SchemaType.OBJECT,
+  properties:{
+    allowed:     {type:SchemaType.BOOLEAN,description:"Whether to send the tip"},
+    amountUsdt:  {type:SchemaType.NUMBER, description:"USDT amount"},
+    reasoning:   {type:SchemaType.STRING, description:"Why this amount"},
+    rejectReason:{type:SchemaType.STRING, description:"Reason if not allowed, else empty string"},
+  },
+  required:["allowed","amountUsdt","reasoning"],
+}
+
+export async function evaluateWithGemini(event:TipEvent,rule:RuleResult,apiKey:string):Promise<TipDecision>{
+  const genAI=new GoogleGenerativeAI(apiKey)
+  const model=genAI.getGenerativeModel({
+    model:"gemini-2.0-flash",
+    generationConfig:{responseMimeType:"application/json",responseSchema:SCHEMA,temperature:0.2,maxOutputTokens:256},
+    systemInstruction:
+      `You are TipAgent, an autonomous USDT tipping bot. Return ONLY valid JSON. `+
+      `Amount MUST be between ${rule.minAmount} and ${rule.maxAmount} USDT. `+
+      `Suggested range: ${rule.suggestedMin}–${rule.suggestedMax} USDT. `+
+      "Low impact → use min range. High impact → use max. Self-tips: always allowed:false.",
+  })
+  const res=await model.generateContent(buildPrompt(event))
+  try{
+    const d=JSON.parse(res.response.text()) as TipDecision
+    d.amountUsdt=Math.min(Math.max(d.amountUsdt??rule.suggestedMin,rule.minAmount),rule.maxAmount)
+    return d
+  }catch{
+    return{allowed:true,amountUsdt:rule.suggestedMin,reasoning:"Fallback: parse error"}
+  }
+}
+
+function buildPrompt(e:TipEvent):string{
+  if(e.eventType==="pr_merged")
+    return `GitHub PR merged. Repo: ${e.context.repoName}. Title: "${e.context.prTitle}". `+
+           `Lines added: ${e.context.prAdditions}, removed: ${e.context.prDeletions}. Contributor: ${e.recipient.displayName}.`
+  if(e.eventType==="issue_closed")
+    return `GitHub Issue closed. Repo: ${e.context.repoName}. Labels: ${e.context.issueLabels?.join(",")??"none"}. Reporter: ${e.recipient.id}.`
+  if(e.eventType==="discord_reaction")
+    return `Discord message got ${e.context.reactionCount} reactions. Author: ${e.recipient.id}.`
+  return `Evaluate: ${JSON.stringify(e.context)}`
+}
+
+6.6 engine/ruleEngine.ts — D1-based (No KV)
+import type { TipEvent } from '@tipagent/shared'
+import type { Env }      from '../index'
+import type { RuleResult } from './types'
+import { getRateLimit }  from '../db/queries'
+
+export async function evaluateRules(event:TipEvent,env:Env):Promise<RuleResult>{
+  const cfg={min:parseFloat(env.TIP_MIN_USDT),max:parseFloat(env.TIP_MAX_USDT),
+             cap:parseFloat(env.DAILY_CAP_PER_USER),cd:parseFloat(env.COOLDOWN_HOURS)}
+  if(event.actor.id===event.recipient.id)return reject("Self-tip not allowed")
+  const cdKey=`cooldown:${event.source}:${event.recipient.id}`
+  const last=await getRateLimit(env.DB,cdKey)
+  if(last){
+    const el=(Date.now()-parseInt(last))/3_600_000
+    if(el<cfg.cd)return reject(`Cooldown: ${(cfg.cd-el).toFixed(1)}h remaining`)
+  }
+  const today=new Date().toISOString().split("T")[0]
+  const capKey=`dailycap:${event.recipient.id}:${today}`
+  const prev=parseFloat((await getRateLimit(env.DB,capKey))??"0")
+  if(prev>=cfg.cap)return reject(`Daily cap: ${prev} USDT sent today`)
+  const[sMin,sMax]=tier(event)
+  const eff=Math.min(cfg.max,sMax,cfg.cap-prev)
+  return{allowed:true,minAmount:cfg.min,maxAmount:eff,suggestedMin:sMin,suggestedMax:Math.min(sMax,eff)}
+}
+
+function tier(e:TipEvent):[number,number]{
+  switch(e.eventType){
+    case"pr_merged":{const a=e.context.prAdditions??0;return a<50?[0.5,2]:a<300?[2,10]:[10,50]}
+    case"issue_closed":return (e.context.issueLabels??[]).includes("bug")?[1,5]:[0.5,2]
+    case"discord_reaction":return[0.5,1]
+    case"discord_command":return[1,10]
+    case"discord_thread_resolved":return[1,3]
+    default:return[0.5,3]
+  }
+}
+function reject(r:string):RuleResult{return{allowed:false,rejectReason:r,minAmount:0,maxAmount:0,suggestedMin:0,suggestedMax:0}}
+
+6.7 engine/types.ts
+export interface RuleResult{
+  allowed:boolean; rejectReason?:string
+  minAmount:number; maxAmount:number; suggestedMin:number; suggestedMax:number
+}
+
+6.8 wallet/wdkManager.ts — Tether WDK Wrapper
+// Tether WDK: https://docs.tether.to/wdk
+// Install: pnpm add @tether/wdk
+// Ketika @tether/wdk tersedia di npm, ganti privateKeyToAccount + writeContract
+// dengan equivalent WDK SDK calls untuk self-custodial signing.
+import{createPublicClient,createWalletClient,http,parseUnits,formatUnits}from 'viem'
+import{privateKeyToAccount}from 'viem/accounts'
+import{SUPPORTED_CHAINS,ERC20_ABI,type SupportedChain}from '@tipagent/shared'
+import type{Env}from '../index'
+export class WDKManager{
+  private c:typeof SUPPORTED_CHAINS[SupportedChain]
+  private acc:ReturnType<typeof privateKeyToAccount>
+  private pub:ReturnType<typeof createPublicClient>
+  private wal:ReturnType<typeof createWalletClient>
+  constructor(env:Env){
+    const id=(env.PRIMARY_CHAIN as SupportedChain)??"base"
+    this.c=SUPPORTED_CHAINS[id]
+    const rpc=id==="base"?env.BASE_RPC_URL:env.POLYGON_RPC_URL
+    this.acc=privateKeyToAccount(env.WDK_PRIVATE_KEY as `0x${string}`)
+    const t=http(rpc)
+    this.pub=createPublicClient({chain:this.c.chain,transport:t})
+    this.wal=createWalletClient({account:this.acc,chain:this.c.chain,transport:t})
+  }
+  get address(){return this.acc.address}
+  async getUSDTBalance():Promise<number>{
+    const r=await this.pub.readContract({address:this.c.usdtAddress,abi:ERC20_ABI,
+      functionName:"balanceOf",args:[this.acc.address]})
+    return parseFloat(formatUnits(r as bigint,6))
+  }
+  async transferUSDT(to:`0x${string}`,amount:number):Promise<string>{
+    return this.wal.writeContract({address:this.c.usdtAddress,abi:ERC20_ABI,
+      functionName:"transfer",args:[to,parseUnits(amount.toFixed(6),6)]})
+  }
+}
+
+6.9 wallet/yieldManager.ts — Aave V3 WAJIB
+Aave V3 adalah fitur WAJIB — Jangan hapus atau comment-out
+Ini yang membuktikan "economic soundness" ke juri: treasury tidak pernah idle sia-sia.
+Jika ada error Aave, log error tapi JANGAN crash agent — tip flow harus tetap jalan.
+
+import{createPublicClient,createWalletClient,http,parseUnits,formatUnits,maxUint256}from 'viem'
+import{privateKeyToAccount}from 'viem/accounts'
+import{SUPPORTED_CHAINS,ERC20_ABI,AAVE_POOL_ABI,ATOKEN_ABI}from '@tipagent/shared'
+import type{Env}from '../index'
+import{saveTreasurySnapshot}from '../db/queries'
+export class YieldManager{
+  private env:Env
+  private c=SUPPORTED_CHAINS["base"]
+  constructor(env:Env){this.env=env}
+  private cl(){
+    const acc=privateKeyToAccount(this.env.WDK_PRIVATE_KEY as `0x${string}`)
+    const t=http(this.env.BASE_RPC_URL)
+    return{pub:createPublicClient({chain:this.c.chain,transport:t}),
+           wal:createWalletClient({account:acc,chain:this.c.chain,transport:t}),acc}
+  }
+  async depositIdleFunds(liquid:number):Promise<string|null>{
+    if(this.env.YIELD_ENABLED!=="true")return null
+    const reserve=parseFloat(this.env.LIQUID_RESERVE_USDT)
+    const excess=liquid-reserve
+    if(excess<1)return null
+    const{wal,acc}=this.cl()
+    await wal.writeContract({address:this.c.usdtAddress,abi:ERC20_ABI,
+      functionName:"approve",args:[this.c.aavePool,maxUint256]})
+    const hash=await wal.writeContract({address:this.c.aavePool,abi:AAVE_POOL_ABI,
+      functionName:"supply",args:[this.c.usdtAddress,parseUnits(excess.toFixed(6),6),acc.address,0]})
+    console.log(`[Aave] Deposited ${excess.toFixed(2)} USDT tx:${hash}`)
+    return hash
+  }
+  async withdrawForTip(needed:number):Promise<string>{
+    const{wal,acc}=this.cl()
+    const hash=await wal.writeContract({address:this.c.aavePool,abi:AAVE_POOL_ABI,
+      functionName:"withdraw",args:[this.c.usdtAddress,parseUnits(needed.toFixed(6),6),acc.address]})
+    console.log(`[Aave] Withdrew ${needed.toFixed(2)} USDT tx:${hash}`)
+    return hash
+  }
+  async getAaveBalance():Promise<number>{
+    const{pub,acc}=this.cl()
+    const r=await pub.readContract({address:this.c.aUSDT,abi:ATOKEN_ABI,
+      functionName:"balanceOf",args:[acc.address]})
+    return parseFloat(formatUnits(r as bigint,6))
+  }
+  async snapshot(liquid:number):Promise<void>{
+    const aave=await this.getAaveBalance().catch(()=>0)
+    await saveTreasurySnapshot(this.env.DB,{liquidUsdt:liquid,aaveUsdt:aave})
+  }
+}
+
+6.10 queue/processor.ts — Full 10-Step Agent Flow
+import type{TipEvent}from '@tipagent/shared'
+import type{Env}from '../index'
+import{evaluateRules}from '../engine/ruleEngine'
+import{evaluateWithGemini}from '../agent/brain'
+import{WDKManager}from '../wallet/wdkManager'
+import{YieldManager}from '../wallet/yieldManager'
+import{resolveRecipient}from '../registry/resolver'
+import{notifyGitHub}from '../notifier/github'
+import{notifyDiscord}from '../notifier/discord'
+import{saveAuditLog,saveTipHistory,updateTipStatus,setRateLimit,getRateLimit}from '../db/queries'
+export interface QueueMessage{type:"tip_event";event:TipEvent}
+
+export async function processQueueMessage(msg:QueueMessage,env:Env){
+  const{event}=msg
+  console.log(`[Queue] ${event.id} (${event.eventType})`)
+  // Step 1: Audit
+  await saveAuditLog(env.DB,{eventId:event.id,event,result:"processing"})
+  // Step 2: Resolve wallet
+  const rec=await resolveRecipient(event.recipient.id,event.source,env.DB)
+  if(!rec){await saveAuditLog(env.DB,{eventId:event.id,event,result:"held",reason:"No wallet"});return}
+  event.recipient.walletAddress=rec.wallet_addr
+  // Step 3: Rule engine
+  const rule=await evaluateRules(event,env)
+  if(!rule.allowed){await saveAuditLog(env.DB,{eventId:event.id,event,result:"rejected",reason:rule.rejectReason});return}
+  // Step 4: Gemini LLM
+  const dec=await evaluateWithGemini(event,rule,env.GEMINI_API_KEY)
+  if(!dec.allowed){await saveAuditLog(env.DB,{eventId:event.id,event,result:"rejected",reason:dec.rejectReason});return}
+  // Step 5: Save pending
+  await saveTipHistory(env.DB,{eventId:event.id,event,recipientAddr:rec.wallet_addr,
+    amountUsdt:dec.amountUsdt,reasoning:dec.reasoning,status:"processing"})
+  // Step 6: Liquidity + Aave withdraw
+  const wdk=new WDKManager(env)
+  const bal=await wdk.getUSDTBalance()
+  if(bal<dec.amountUsdt){
+    try{await new YieldManager(env).withdrawForTip((dec.amountUsdt-bal)*1.1)}
+    catch(e){console.error("[Aave] Withdraw failed:",e)}
+  }
+  // Step 7–10: Transfer + update counters + notify
+  try{
+    const tx=await wdk.transferUSDT(rec.wallet_addr as `0x${string}`,dec.amountUsdt)
+    console.log(`[WDK] ${dec.amountUsdt} USDT → ${rec.wallet_addr} tx:${tx}`)
+    const cdKey=`cooldown:${event.source}:${event.recipient.id}`
+    const today=new Date().toISOString().split("T")[0]
+    const capKey=`dailycap:${event.recipient.id}:${today}`
+    const prev=parseFloat((await getRateLimit(env.DB,capKey))??"0")
+    await Promise.all([
+      setRateLimit(env.DB,cdKey,Date.now().toString(),86_400_000),
+      setRateLimit(env.DB,capKey,(prev+dec.amountUsdt).toString(),86_400_000),
+      updateTipStatus(env.DB,event.id,"confirmed",tx),
+    ])
+    if(event.source==="github")await notifyGitHub(event,dec.amountUsdt,tx,env.GITHUB_TOKEN)
+    else if(event.source==="discord")await notifyDiscord(event,dec.amountUsdt,tx,env.DISCORD_BOT_TOKEN)
+  }catch(e){
+    await updateTipStatus(env.DB,event.id,"failed",undefined,String(e))
+    throw e
+  }
+}
+
+6.11 jobs/yieldOptimizer.ts — Cron Handler
+import type{Env}from '../index'
+import{WDKManager}from '../wallet/wdkManager'
+import{YieldManager}from '../wallet/yieldManager'
+import{cleanExpiredRateLimits}from '../db/queries'
+export async function runYieldOptimizer(env:Env){
+  console.log("[Cron] YieldOptimizer running")
+  try{
+    const wdk=new WDKManager(env)
+    const ym=new YieldManager(env)
+    const liquid=await wdk.getUSDTBalance()
+    const reserve=parseFloat(env.LIQUID_RESERVE_USDT)
+    console.log(`[Cron] Liquid:${liquid} Reserve:${reserve}`)
+    if(liquid>reserve) await ym.depositIdleFunds(liquid)
+    await ym.snapshot(Math.min(liquid,reserve))
+    await cleanExpiredRateLimits(env.DB)
+  }catch(e){console.error("[Cron] Error:",e)}
+}
+
+6.12 middleware/auth.ts
+import type{MiddlewareHandler}from 'hono'
+import type{Env}from '../index'
+export const authMiddleware:MiddlewareHandler<{Bindings:Env}>=async(c,next)=>{
+  const k=c.req.header("X-API-Key")??c.req.query("api_key")
+  if(!k||k!==c.env.DASHBOARD_API_KEY)return c.json({error:"Unauthorized"},401)
+  await next()
+}
+
+ 
+7. Frontend — React (apps/dashboard/src)
+7.1 lib/api.ts
+const BASE=import.meta.env.VITE_API_URL??'http://localhost:8787'
+const KEY =import.meta.env.VITE_API_KEY??''
+export async function apiFetch<T>(path:string,init?:RequestInit):Promise<T>{
+  const r=await fetch(`${BASE}${path}`,{...init,
+    headers:{"Content-Type":"application/json","X-API-Key":KEY,...init?.headers}})
+  if(!r.ok)throw new Error(`API ${r.status}: ${path}`)
+  return r.json() as Promise<T>
+}
+
+7.2 pages/Dashboard.tsx
+import{useEffect,useState}from 'react'
+import{apiFetch}from '../lib/api'
+import{TipFeed}from '../components/TipFeed'
+import{StatsCard}from '../components/StatsCard'
+import{TreasuryPanel}from '../components/TreasuryPanel'
+type Stats={totalTips:number;totalUsdt:number;activeUsers:number;todayTips:number}
+type Treasury={liquidUsdt:number;aaveUsdt:number;totalUsdt:number;aaveApy?:string}
+export function Dashboard(){
+  const[stats,setStats]=useState<Stats>({totalTips:0,totalUsdt:0,activeUsers:0,todayTips:0})
+  const[tips,setTips]=useState<any[]>([])
+  const[treasury,setTreasury]=useState<Treasury>({liquidUsdt:0,aaveUsdt:0,totalUsdt:0})
+  const[loading,setLoading]=useState(true)
+  const refresh=async()=>{
+    const[t,s,tr]=await Promise.all([
+      apiFetch<{data:any[]}>("/api/tips?limit=20"),
+      apiFetch<Stats>("/api/tips/stats"),
+      apiFetch<Treasury>("/api/tips/treasury"),
+    ])
+    setTips(t.data);setStats(s);setTreasury(tr)
+  }
+  useEffect(()=>{
+    refresh().finally(()=>setLoading(false))
+    const id=setInterval(refresh,30_000)
+    return()=>clearInterval(id)
+  },[])
+  if(loading)return<p>Loading TipAgent...</p>
+  return(<div className="dashboard">
+    <header><h1>TipAgent</h1><span className="badge">🟢 Active</span></header>
+    <div className="stats-grid">
+      <StatsCard label="Total Tips"   value={stats.totalTips}/>
+      <StatsCard label="Total USDT"   value={`$${stats.totalUsdt.toFixed(2)}`}/>
+      <StatsCard label="Contributors" value={stats.activeUsers}/>
+      <StatsCard label="Today"        value={stats.todayTips}/>
+    </div>
+    <div className="main-grid">
+      <TipFeed tips={tips}/>
+      <TreasuryPanel treasury={treasury}/>
+    </div>
+  </div>)
+}
+
+7.3 .env.local
+VITE_API_URL=http://localhost:8787
+VITE_API_KEY=same_value_as_DASHBOARD_API_KEY
+
+7.4 _redirects
+/* /index.html 200
+
+ 
+8. Package Files
+8.1 pnpm-workspace.yaml
+packages:
+  - "apps/*"
+  - "packages/*"
+
+8.2 turbo.json
+{
+  "$schema":"https://turbo.build/schema.json",
+  "tasks":{
+    "build":{"dependsOn":["^build"],"outputs":["dist/**"]},
+    "dev":{"cache":false,"persistent":true},
+    "deploy":{"dependsOn":["build"]},
+    "type-check":{"dependsOn":["^type-check"]}
+  }
+}
+
+8.3 apps/api/package.json
+{
+  "name":"@tipagent/api","private":true,
+  "scripts":{"dev":"wrangler dev","deploy":"wrangler deploy","type-check":"tsc --noEmit"},
+  "dependencies":{
+    "@google/generative-ai":"^0.21.0",
+    "@tipagent/shared":"workspace:*",
+    "hono":"^4.4.0",
+    "viem":"^2.21.0"
+  },
+  "devDependencies":{
+    "@cloudflare/workers-types":"^4.20240909.0",
+    "wrangler":"^3.75.0",
+    "typescript":"^5.4.0"
+  }
+}
+
+8.4 apps/dashboard/package.json
+{
+  "name":"@tipagent/dashboard","private":true,
+  "scripts":{"dev":"vite","build":"vite build","deploy":"wrangler pages deploy dist --project-name=tipagent-dashboard"},
+  "dependencies":{
+    "@tipagent/shared":"workspace:*",
+    "react":"^18.3.0","react-dom":"^18.3.0","react-router-dom":"^6.26.0"
+  },
+  "devDependencies":{
+    "@types/react":"^18.3.0","@types/react-dom":"^18.3.0",
+    "@vitejs/plugin-react":"^4.3.0","typescript":"^5.4.0","vite":"^5.4.0"
+  }
+}
+
+8.5 packages/shared/package.json
+{
+  "name":"@tipagent/shared","private":true,
+  "main":"./src/index.ts","types":"./src/index.ts",
+  "dependencies":{"viem":"^2.21.0"},
+  "devDependencies":{"typescript":"^5.4.0"}
+}
+
+ 
+9. Setup & Deploy Commands
+9.1 First-time Setup
+pnpm install
+wrangler login
+
+# D1 — copy database_id ke wrangler.toml
+wrangler d1 create tipagent-db
+
+# Queues
+wrangler queues create tip-events-queue
+wrangler queues create tip-events-dlq
+
+# Schema migration
+wrangler d1 execute tipagent-db --local --file=apps/api/src/db/schema.sql
+wrangler d1 execute tipagent-db --file=apps/api/src/db/schema.sql
+
+# Secrets (masukkan value saat diminta)
+wrangler secret put GEMINI_API_KEY
+wrangler secret put WDK_PRIVATE_KEY
+wrangler secret put GITHUB_WEBHOOK_SECRET
+wrangler secret put GITHUB_TOKEN
+wrangler secret put DISCORD_BOT_TOKEN
+wrangler secret put DISCORD_WEBHOOK_SECRET
+wrangler secret put CUSTOM_WEBHOOK_SECRET
+wrangler secret put DASHBOARD_API_KEY
+wrangler secret put BASE_RPC_URL
+wrangler secret put POLYGON_RPC_URL
+
+9.2 Development
+# Terminal 1
+cd apps/api && wrangler dev
+# Terminal 2
+cd apps/dashboard && pnpm dev
+
+9.3 Deploy Production
+cd apps/api && wrangler deploy
+cd apps/dashboard && pnpm build && wrangler pages deploy dist --project-name=tipagent-dashboard
+
+9.4 GitHub Webhook
+URL    : https://tipagent-api.YOUR_SUBDOMAIN.workers.dev/webhooks/github
+Type   : application/json
+Secret : [value GITHUB_WEBHOOK_SECRET]
+Events : Pull requests, Issues
+
+ 
+10. Instruksi Cursor
+10.1 Prompt Utama
+Buat seluruh monorepo TipAgent sesuai spec dokumen ini.
+
+1. Buat struktur folder persis sesuai Section 2.
+2. File dengan kode di Section 5-8: copy persis, jangan modifikasi.
+3. File di tabel Section 10.2: generate implementasi lengkap.
+4. Setelah selesai, tampilkan perintah setup Section 9.1.
+
+Stack: TypeScript + Hono + React + CF Workers/Pages/D1/Queues + Gemini 2.0 Flash + viem
+
+10.2 File yang Harus Di-generate Cursor
+File Path	Yang Harus Dibuat Cursor
+apps/api/src/registry/resolver.ts	query D1 user_registry WHERE source=? AND user_id=?, return row atau null. Export: resolveRecipient(userId, source, db)
+apps/api/src/routes/registry.ts	GET /: list semua registry. POST /: insert baru. DELETE /:id: hapus. Pakai authMiddleware.
+apps/api/src/routes/tips.ts	GET /: recent tips (limit/offset). GET /stats: getTipStats(). GET /treasury: ambil row terakhir treasury_snapshots.
+apps/api/src/routes/health.ts	GET /: return {ok,walletAddress,liquidUsdt,aaveUsdt,env}. Panggil WDKManager dan YieldManager.
+apps/api/src/routes/webhooks/discord.ts	Mirror github.ts, verifyHmac dengan DISCORD_WEBHOOK_SECRET, normalizeDiscordReaction().
+apps/api/src/routes/webhooks/custom.ts	verifyHmac dengan CUSTOM_WEBHOOK_SECRET, normalize ke TipEvent eventType:"custom_webhook".
+apps/api/src/notifier/github.ts	POST ke GitHub API /repos/{owner}/{repo}/issues/{number}/comments. Body: "✅ Tip: {amount} USDT → @{user} 🔗 basescan.org/tx/{hash}"
+apps/api/src/notifier/discord.ts	POST ke Discord API /channels/{channelId}/messages. Format sama seperti GitHub.
+apps/api/tsconfig.json	target ES2022, lib [ES2022], module ESNext, moduleResolution Bundler, strict true, types ["@cloudflare/workers-types"]
+apps/dashboard/tsconfig.json	Standard React Vite tsconfig, strict true, jsx react-jsx
+apps/dashboard/vite.config.ts	Plugin react. Server proxy /api → localhost:8787. Build outDir: dist.
+apps/dashboard/src/App.tsx	React Router v6: / → Dashboard, /registry → Registry, /treasury → Treasury. Layout dengan sidebar.
+apps/dashboard/src/components/TipFeed.tsx	Table: timestamp, source badge, event_type, recipient, amount (green), status badge, tx hash link.
+apps/dashboard/src/components/TreasuryPanel.tsx	Card: Liquid USDT, Aave USDT + APY, Total USDT. Tombol manual deposit.
+apps/dashboard/src/components/StatsCard.tsx	Simple card: label + value.
+apps/dashboard/src/pages/Registry.tsx	Table users. Form: source select + userId + wallet_addr. Tombol delete.
+packages/shared/src/index.ts	Re-export dari types/tipEvent.ts, constants/chains.ts, constants/abis.ts
+packages/shared/tsconfig.json	moduleResolution Bundler, strict true
+.gitignore	node_modules dist .wrangler .dev.vars *.env.local .turbo
+
+10.3 File yang TIDAK Boleh Diubah
+🔒 Lock — Jangan Modifikasi
+packages/shared/src/types/tipEvent.ts — kontrak tipe utama
+apps/api/src/index.ts (Env type) — harus match persis wrangler.toml
+apps/api/src/engine/ruleEngine.ts — rule bounds untuk demo ke juri
+apps/api/src/wallet/yieldManager.ts — Aave differentiator WAJIB
+apps/api/src/queue/processor.ts (urutan 10 steps) — ini adalah agent flow
+wrangler.toml binding names DB dan TIP_QUEUE — case-sensitive
+
+ 
+11. Changelog v1 → v2
+Komponen	v1	v2	Alasan
+LLM	Anthropic Claude	Google Gemini 2.0 Flash	Permintaan user
+Rate Limit	Cloudflare KV	D1 tabel rate_limits	Hilangkan KV dependency
+KV Namespace	REGISTRY_KV + RATE_LIMIT_KV	Dihapus	Simplifiy — D1 saja
+Aave	Opsional (toggle)	WAJIB	Differentiator utama
+Gemini SDK	-	@google/generative-ai ^0.21.0	Baru
+Anthropic SDK	@anthropic-ai/sdk	Dihapus	Diganti Gemini
+Cron	node-cron (tidak CF)	wrangler.toml [triggers] crons	Native CF
+Structured Output	Zod schema	responseSchema SchemaType	Gemini native
+
+ 
+12. Demo Script Submission Video
+Menit	Aksi	Kriteria Juri
+0:00–0:30	Buka dashboard: wallet address, liquid USDT, Aave position.	WDK + Economic soundness
+0:30–1:00	Merge PR di GitHub (10–50 lines disiapkan sebelumnya).	Real-world trigger
+1:00–1:45	CF Workers logs: queue → Gemini evaluate → rule check.	Agent autonomy
+1:45–2:15	GitHub: comment otomatis muncul di PR dengan amount + txHash.	End-to-end flow
+2:15–2:45	Buka Basescan: confirmed USDT transfer ke recipient wallet.	Onchain settlement
+2:45–3:15	Dashboard refresh: tip muncul di feed, stats update.	Technical correctness
+3:15–3:45	Tip kedua ke user yang sama → auto-reject cooldown.	Rule engine + safety
+3:45–4:15	Treasury panel: Aave balance naik setelah cron.	Aave yield — differentiator
+4:15–5:00	Registry: add wallet baru → trigger tip → konfirmasi.	Completeness + UX
+
+💡 Tips Demo
+Gunakan Base mainnet (gas murah) — tx hash di Basescan lebih meyakinkan dari testnet.
+Siapkan recipient wallet sudah terdaftar di registry sebelum recording.
+Record 1080p. Narasi singkat setiap step.
+Tunjukkan CF Workers dashboard untuk buktikan D1 + Queue dipakai.
+Durasi ideal: 4–5 menit.
+

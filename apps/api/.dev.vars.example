@@ -1,0 +1,26 @@
+# Copy file ini ke .dev.vars dan isi valuenya
+# JANGAN commit .dev.vars ke git!
+
+# Google Gemini — https://aistudio.google.com/app/apikey
+GEMINI_API_KEY=AIzaSy...
+
+# Tether WDK — private key 0x + 64 hex chars
+WDK_PRIVATE_KEY=0x...
+
+# GitHub
+GITHUB_WEBHOOK_SECRET=random_32chars
+GITHUB_TOKEN=ghp_...
+
+# Discord
+DISCORD_BOT_TOKEN=...
+DISCORD_WEBHOOK_SECRET=random_32chars
+
+# Custom Webhook
+CUSTOM_WEBHOOK_SECRET=random_32chars
+
+# Dashboard auth — generate: openssl rand -hex 16
+DASHBOARD_API_KEY=random_32chars
+
+# RPC
+BASE_RPC_URL=https://mainnet.base.org
+POLYGON_RPC_URL=https://polygon-rpc.com

@@ -1,0 +1,33 @@
+name = "tipagent-api"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database (SATU-SATUNYA storage — tidak ada KV)
+[[d1_databases]]
+binding      = "DB"
+database_name= "tipagent-db"
+database_id  = "141ecbd5-7de6-495a-a1c7-7dfd5bb6fe06"
+
+# Cloudflare Queues
+[[queues.producers]]
+binding = "TIP_QUEUE"
+queue   = "tip-events-queue"
+
+[[queues.consumers]]
+queue             = "tip-events-queue"
+max_batch_size    = 10
+max_batch_timeout = 5
+max_retries       = 3
+dead_letter_queue = "tip-events-dlq"
+
+# Cron trigger — Aave yield optimizer setiap 30 menit
+[triggers]
+crons = ["*/30 * * * *"]
+
+# Non-secret runtime vars (tip rules now per-project in DB)
+[vars]
+ENVIRONMENT         = "production"
+PRIMARY_CHAIN       = "base"
+LIQUID_RESERVE_USDT = "50"
+YIELD_ENABLED       = "true"
