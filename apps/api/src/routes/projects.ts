@@ -171,10 +171,11 @@ projectsRoute.post('/', async (c) => {
       ]
     }, 201)
   } catch (e: any) {
-    if (e.message?.includes('UNIQUE constraint')) {
+    if (e.message?.includes('UNIQUE constraint') || e.message?.includes('Unique constraint')) {
       return c.json({ error: 'This repository is already registered' }, 409)
     }
-    throw e
+    console.error('[Projects] Create project error:', e)
+    return c.json({ error: e.message || 'Failed to create project', detail: e.stack }, 500)
   }
 })
 
