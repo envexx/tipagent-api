@@ -38,18 +38,29 @@ RUN pnpm build
 # Production stage
 FROM node:22-alpine AS runner
 
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+
 # Install runtime dependencies for Prisma
 RUN apk add --no-cache openssl-dev
 
 WORKDIR /app
 
-# Copy built API
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/package.json ./
-COPY --from=builder /app/apps/api/prisma ./prisma
+# Copy workspace files for dependency resolution
+COPY --from=builder /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
+COPY --from=builder /app/packages ./packages
 
-# Copy node_modules (including Prisma client)
-COPY --from=builder /app/node_modules ./node_modules
+# Copy built API
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/apps/api/package.json ./apps/api/
+COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
+
+# Install production dependencies only
+RUN pnpm install --prod --frozen-lockfile
+
+# Generate Prisma client in production
+WORKDIR /app/apps/api
+RUN npx prisma generate
 
 # Set environment
 ENV NODE_ENV=production
