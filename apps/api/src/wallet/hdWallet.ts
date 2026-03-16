@@ -75,10 +75,10 @@ export class HDWalletManager {
    */
   async transferUSDT(projectId: number, to: string, amount: number): Promise<string> {
     const account = await this.wdk.getAccount('base', projectId)
-    const result = await account.sendTransaction({
-      to,
-      value: BigInt(Math.round(amount * 1e6)),
-      tokenAddress: USDT_BASE,
+    const result = await account.transfer({
+      token: USDT_BASE,
+      recipient: to,
+      amount: BigInt(Math.round(amount * 1e6)),
     })
     return result.hash
   }
