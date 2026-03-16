@@ -22,7 +22,7 @@ export async function evaluateWithGemini(
 ): Promise<TipDecision> {
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-1.5-flash",
     generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.2, maxOutputTokens: 256 },
     systemInstruction: buildSystemPrompt(
       rule.minAmount, 
@@ -38,7 +38,8 @@ export async function evaluateWithGemini(
     d.amountUsdt = Math.min(Math.max(d.amountUsdt ?? rule.suggestedMin, rule.minAmount), rule.maxAmount)
     return d
   } catch (e) {
-    console.error('[Gemini] evaluation failed, using fallback:', e)
+    const errMsg = e instanceof Error ? e.message : String(e)
+    console.error('[Gemini] evaluation failed, using fallback. Error:', errMsg)
     return { allowed: true, amountUsdt: Math.min(rule.suggestedMin, rule.maxAmount), reasoning: "Fallback: AI evaluation unavailable" }
   }
 }

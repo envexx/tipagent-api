@@ -3,7 +3,11 @@
     "allow": [
       "Bash(cd \"C:\\\\Users\\\\HP\\\\OneDrive\\\\Dokumen\\\\Program\\\\hacktone\\\\tip\" && pnpm install 2>&1)",
       "Bash(cd \"C:\\\\Users\\\\HP\\\\OneDrive\\\\Dokumen\\\\Program\\\\hacktone\\\\tip\\\\apps\\\\api\" && pnpm install 2>&1)",
-      "Bash(cd \"C:\\\\Users\\\\HP\\\\OneDrive\\\\Dokumen\\\\Program\\\\hacktone\\\\tip\\\\apps\\\\dashboard\" && pnpm install 2>&1)"
+      "Bash(cd \"C:\\\\Users\\\\HP\\\\OneDrive\\\\Dokumen\\\\Program\\\\hacktone\\\\tip\\\\apps\\\\dashboard\" && pnpm install 2>&1)",
+      "Bash(cd:*)",
+      "Bash(git add:*)",
+      "Bash(node:*)",
+      "Bash(find:*)"
     ]
   }
 }
