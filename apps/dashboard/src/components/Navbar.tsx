@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, FolderGit2, Wallet, LogOut, Zap, Compass, CircleDollarSign, Github } from 'lucide-react'
+import { LayoutDashboard, FolderGit2, Wallet, LogOut, Compass, CircleDollarSign, Github } from 'lucide-react'
 
 interface NavbarProps {
   user: { githubUsername: string; avatarUrl?: string } | null
@@ -25,14 +25,11 @@ export function Navbar({ user, onLogout }: NavbarProps) {
 
         {/* Logo */}
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', flexShrink: 0 }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: 9,
-            background: 'linear-gradient(135deg, var(--web3-green), var(--web3-blue))',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(0,229,160,0.2)',
-          }}>
-            <Zap size={17} color="#000" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="TipAgent"
+            style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'contain' }}
+          />
           <span style={{ fontWeight: 800, fontSize: '1.05rem', color: '#fff', letterSpacing: '-0.02em' }}>
             TipAgent
           </span>
