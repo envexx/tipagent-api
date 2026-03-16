@@ -4,3 +4,11 @@ dist
 .dev.vars
 *.env.local
 .turbo
+
+# Local tooling
+.claude
+.orchids
+
+# Docs & notes
+dokumen.txt
+docs/
